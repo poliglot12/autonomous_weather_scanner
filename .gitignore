@@ -3,3 +3,8 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+.test/
+.src/i2cscanner.cpp
+.lib
+.include
+.vscode
