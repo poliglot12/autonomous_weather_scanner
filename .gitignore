@@ -8,3 +8,4 @@
 .lib
 .include
 .vscode
+.include/secrets.h

@@ -1,19 +1,19 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <SD.h>
+#include <RTClib.h>
+#include "sd_logger.h"
 
-#define SD_MISO 14
-#define SD_MOSI 27
-#define SD_SCK  26
-#define SD_CS   25
+constexpr int SD_MISO = 14;
+constexpr int SD_MOSI = 27;
+constexpr int SD_SCK  = 26;
+constexpr int SD_CS   = 25;
 
 SPIClass sdSPI(HSPI);
 
 bool initSD() {
-
     Serial.println("Initializing SD card...");
 
-    // Start our custom SPI bus
     sdSPI.begin(
         SD_SCK,
         SD_MISO,
@@ -21,15 +21,11 @@ bool initSD() {
         SD_CS
     );
 
-    // Try mounting the SD card
     if (!SD.begin(SD_CS, sdSPI, 4000000)) {
         Serial.println("SD initialization FAILED");
         return false;
     }
 
-    Serial.println("SD initialized successfully");
-
-    // Check whether an actual card exists
     uint8_t cardType = SD.cardType();
 
     if (cardType == CARD_NONE) {
@@ -37,9 +33,9 @@ bool initSD() {
         return false;
     }
 
-    // Print size
-    uint64_t cardSizeMB =
-        SD.cardSize() / (1024 * 1024);
+    uint64_t cardSizeMB = SD.cardSize() / (1024ULL * 1024ULL);
+
+    Serial.println("SD initialized successfully");
 
     Serial.print("SD card size: ");
     Serial.print(cardSizeMB);
@@ -48,34 +44,8 @@ bool initSD() {
     return true;
 }
 
-
-bool writeTestFile() {
-
-    File file = SD.open(
-        "/test.txt",
-        FILE_WRITE
-    );
-
-    if (!file) {
-        Serial.println("Could not open test.txt");
-        return false;
-    }
-
-    file.println("Weather station SD test");
-    file.println("SD logger module works!");
-
-    file.close();
-
-    Serial.println("Test file written");
-
-    return true;
-}
-
-
 bool createWeatherFile() {
 
-    // If the file already exists,
-    // don't write the header again.
     if (SD.exists("/weather.csv")) {
         Serial.println("weather.csv already exists");
         return true;
@@ -92,7 +62,7 @@ bool createWeatherFile() {
     }
 
     file.println(
-        "temperature_C,humidity_percent,pressure_hPa,uv_raw"
+        "date,time,temperature_c,humidity_percent,pressure_hpa,uv_raw"
     );
 
     file.close();
@@ -104,12 +74,12 @@ bool createWeatherFile() {
 
 
 bool logWeatherData(
+    const DateTime& timestamp,
     float temperature,
     float humidity,
     float pressure,
     uint32_t uv
 ) {
-
     File file = SD.open(
         "/weather.csv",
         FILE_APPEND
@@ -120,6 +90,47 @@ bool logWeatherData(
         return false;
     }
 
+    // Date: YYYY-MM-DD
+    file.print(timestamp.year());
+    file.print("-");
+
+    if (timestamp.month() < 10) {
+        file.print("0");
+    }
+
+    file.print(timestamp.month());
+    file.print("-");
+
+    if (timestamp.day() < 10) {
+        file.print("0");
+    }
+
+    file.print(timestamp.day());
+    file.print(",");
+
+    // Time: HH:MM:SS
+    if (timestamp.hour() < 10) {
+        file.print("0");
+    }
+
+    file.print(timestamp.hour());
+    file.print(":");
+
+    if (timestamp.minute() < 10) {
+        file.print("0");
+    }
+
+    file.print(timestamp.minute());
+    file.print(":");
+
+    if (timestamp.second() < 10) {
+        file.print("0");
+    }
+
+    file.print(timestamp.second());
+    file.print(",");
+
+    // Weather data
     file.print(temperature, 2);
     file.print(",");
 

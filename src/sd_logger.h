@@ -1,12 +1,14 @@
 #pragma once
 
 #include <Arduino.h>
+#include <RTClib.h>
 
 bool initSD();
-bool writeTestFile();
 
 bool createWeatherFile();
+
 bool logWeatherData(
+    const DateTime& timestamp,
     float temperature,
     float humidity,
     float pressure,
