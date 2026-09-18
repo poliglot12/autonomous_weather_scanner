@@ -4,7 +4,7 @@
 
 bool connectWiFi();
 
-bool uploadWeatherToNeon(
+bool uploadWeatherToWorker(
     float temperature,
     float humidity,
     float pressure,

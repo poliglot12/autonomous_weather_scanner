@@ -7,7 +7,7 @@
 #include "rtc_clock.h"
 #include "sd_logger.h"
 #include "wind_vane.h"
-#include "db_logger.h"
+#include "weather_api.h"
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -24,11 +24,10 @@ Adafruit_SSD1306 display(
 const unsigned long logInterval = 60000;
 unsigned long lastLogTime = 0;
 
-//neon data
-const unsigned long neonInterval =
-    600000; // 10 minutes
+unsigned long lastUploadTime = 0;
 
-    unsigned long lastNeonUpload = 0;
+const unsigned long uploadInterval =
+    10UL * 60UL * 1000UL;   // 10 minutes
 
 void setup() {
     Serial.begin(115200);
@@ -76,11 +75,23 @@ void setup() {
 
 void loop() {
 
+    // -------------------------
+    // READ SENSORS
+    // -------------------------
+
     WeatherData data = readWeatherSensors();
 
     DateTime now = getCurrentTime();
 
-    float windDirection = getWindDirectionDegrees();
+    uint32_t revolutions = getRevolutionCount();
+
+    float rpm = getRPM();
+
+    float windSpeedMPS = getWindSpeedMPS();
+    float windSpeedMPH = getWindSpeedMPH();
+
+    float windDirection =
+        getWindDirectionDegrees();
 
     // -------------------------
     // SERIAL OUTPUT
@@ -116,17 +127,17 @@ void loop() {
     Serial.println(data.uv);
 
     Serial.print("Revolutions: ");
-    Serial.println(getRevolutionCount());
+    Serial.println(revolutions);
 
     Serial.print("RPM: ");
-    Serial.println(getRPM(), 1);
+    Serial.println(rpm, 1);
 
     Serial.print("Wind speed: ");
-    Serial.print(getWindSpeedMPS(), 2);
+    Serial.print(windSpeedMPS, 2);
     Serial.println(" m/s");
 
     Serial.print("Wind speed: ");
-    Serial.print(getWindSpeedMPH(), 2);
+    Serial.print(windSpeedMPH, 2);
     Serial.println(" mph");
 
     Serial.print("Wind direction: ");
@@ -194,26 +205,46 @@ void loop() {
     }
 
     // -------------------------
-    // DB LOGGING
+    // CLOUD / D1 LOGGING
     // -------------------------
 
     if (
-    millis() - lastNeonUpload
-    >= neonInterval
+        lastUploadTime == 0 ||
+        millis() - lastUploadTime >= uploadInterval
     ) {
 
-    lastNeonUpload = millis();
+        lastUploadTime = millis();
 
-    uploadWeatherToNeon(
-        data.temperature,
-        data.humidity,
-        data.pressure,
-        data.uv,
-        getWindSpeedMPS(),
-        getWindDirectionDegrees(),
-        getRPM()
+        Serial.println(
+            "Uploading weather data..."
         );
-    }   
+
+        bool uploaded =
+            uploadWeatherToWorker(
+                data.temperature,
+                data.humidity,
+                data.pressure,
+                data.uv,
+                windSpeedMPS,
+                windDirection,
+                rpm
+            );
+
+
+        if (uploaded) {
+
+            Serial.println(
+                "Weather data uploaded successfully"
+            );
+
+        }
+        else {
+
+            Serial.println(
+                "Weather upload failed"
+            );
+        }
+    }
 
     delay(250);
 }
