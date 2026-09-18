@@ -10,3 +10,8 @@
 .vscode
 .include/secrets.h
 .secrets.h
+src/secrets.h
+lib/README
+include/README
+src/i2cscanner.cpp
+test/README
