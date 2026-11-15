@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include "driver/gpio.h"
+#include "esp_sleep.h"
 #include "anemometer.h"
 
 constexpr int REED_PIN = 33;
@@ -78,6 +80,24 @@ void initAnemometer() {
     );
 
     Serial.println("Anemometer initialized");
+}
+
+
+// --------------------------------------------------
+// LIGHT SLEEP WAKEUP
+// --------------------------------------------------
+
+void enableAnemometerLightSleepWakeup() {
+
+    // Light sleep only supports level-triggered GPIO wakeup
+    // (edge detection needs a clock that's paused during sleep).
+    // The reed switch pulls this pin low when closed.
+    gpio_wakeup_enable(
+        (gpio_num_t)REED_PIN,
+        GPIO_INTR_LOW_LEVEL
+    );
+
+    esp_sleep_enable_gpio_wakeup();
 }
 
 

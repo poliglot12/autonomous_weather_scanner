@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <WiFi.h>
+#include <esp_sleep.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include "weather_sensors.h"
@@ -20,14 +22,74 @@ Adafruit_SSD1306 display(
     OLED_RESET
 );
 
-//sd card log data
-const unsigned long logInterval = 60000;
-unsigned long lastLogTime = 0;
-
 unsigned long lastUploadTime = 0;
 
 const unsigned long uploadInterval =
     10UL * 60UL * 1000UL;   // 10 minutes
+
+// -------------------------
+// ADAPTIVE SLEEP CYCLE
+// -------------------------
+// Instead of a fixed 1-minute read/log cycle, each cycle's length
+// depends on how much the temperature moved since the last cycle:
+// fast-changing temperature -> short cycle, stable temperature -> long cycle.
+
+const unsigned long MIN_CYCLE_INTERVAL_MS = 15UL * 1000UL;        // fastest: 15 s
+const unsigned long MAX_CYCLE_INTERVAL_MS = 5UL * 60UL * 1000UL;  // slowest: 5 min
+
+const float TEMP_DELTA_FAST_C = 0.3f;   // delta at/above this -> MIN_CYCLE_INTERVAL_MS
+const float TEMP_DELTA_SLOW_C = 0.05f;  // delta at/below this -> MAX_CYCLE_INTERVAL_MS
+
+float lastCycleTemp = NAN;
+
+unsigned long nextCycleIntervalMs(float currentTemp) {
+
+    // No baseline yet, or sensor unavailable: play it safe with a short cycle.
+    if (isnan(currentTemp) || isnan(lastCycleTemp)) {
+        return MIN_CYCLE_INTERVAL_MS;
+    }
+
+    float delta = fabs(currentTemp - lastCycleTemp);
+
+    if (delta >= TEMP_DELTA_FAST_C) {
+        return MIN_CYCLE_INTERVAL_MS;
+    }
+
+    if (delta <= TEMP_DELTA_SLOW_C) {
+        return MAX_CYCLE_INTERVAL_MS;
+    }
+
+    float ratio =
+        (delta - TEMP_DELTA_SLOW_C) /
+        (TEMP_DELTA_FAST_C - TEMP_DELTA_SLOW_C);
+
+    return MAX_CYCLE_INTERVAL_MS -
+        (unsigned long)(ratio * (MAX_CYCLE_INTERVAL_MS - MIN_CYCLE_INTERVAL_MS));
+}
+
+// Light-sleeps for durationMs, waking briefly on every anemometer pulse
+// (so wind counting stays continuous) and at least once a second so
+// updateAnemometer() can still detect "wind stopped".
+void lightSleepFor(unsigned long durationMs) {
+
+    unsigned long elapsed = 0;
+
+    while (elapsed < durationMs) {
+
+        unsigned long remaining = durationMs - elapsed;
+        unsigned long chunk = remaining < 1000 ? remaining : 1000;
+
+        esp_sleep_enable_timer_wakeup((uint64_t)chunk * 1000ULL);
+
+        unsigned long before = millis();
+
+        esp_light_sleep_start();
+
+        elapsed += millis() - before;
+
+        updateAnemometer();
+    }
+}
 
 void setup() {
     Serial.begin(115200);
@@ -35,8 +97,6 @@ void setup() {
     
     // Shared I2C bus
     Wire.begin(19, 18);
-
-    connectWiFi();
 
     // RTC
     if (!initRTC()) {
@@ -49,6 +109,7 @@ void setup() {
     }
 
     initAnemometer();
+    enableAnemometerLightSleepWakeup();
 
     if (!initWindVane()) {
     Serial.println("Wind vane initialization failed");
@@ -74,6 +135,8 @@ void setup() {
 }
 
 void loop() {
+
+    unsigned long cycleStart = millis();
 
     // -------------------------
     // READ SENSORS
@@ -190,19 +253,16 @@ void loop() {
     // -------------------------
     // SD LOGGING
     // -------------------------
+    // One log line per cycle; the cycle itself is already paced
+    // adaptively below, so no separate fixed interval is needed here.
 
-    if (millis() - lastLogTime >= logInterval) {
-
-        lastLogTime = millis();
-
-        logWeatherData(
-            now,
-            data.temperature,
-            data.humidity,
-            data.pressure,
-            data.uv
-        );
-    }
+    logWeatherData(
+        now,
+        data.temperature,
+        data.humidity,
+        data.pressure,
+        data.uv
+    );
 
     // -------------------------
     // CLOUD / D1 LOGGING
@@ -244,7 +304,30 @@ void loop() {
                 "Weather upload failed"
             );
         }
+
+        // WiFi only needs to be up for the upload itself;
+        // drop it before sleeping to avoid keeping the radio powered.
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_OFF);
     }
 
-    delay(250);
+    // -------------------------
+    // ADAPTIVE LIGHT SLEEP
+    // -------------------------
+
+    unsigned long cycleInterval = nextCycleIntervalMs(data.temperature);
+    lastCycleTemp = data.temperature;
+
+    unsigned long cycleElapsed = millis() - cycleStart;
+
+    unsigned long sleepDuration =
+        cycleElapsed < cycleInterval
+            ? cycleInterval - cycleElapsed
+            : 0;
+
+    Serial.print("Light-sleeping for ");
+    Serial.print(sleepDuration);
+    Serial.println(" ms");
+
+    lightSleepFor(sleepDuration);
 }
