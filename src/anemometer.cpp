@@ -5,34 +5,17 @@
 
 constexpr int REED_PIN = 33;
 
-// Minimum allowed time between valid magnet passes.
-// 40 ms still permits up to 1500 RPM while rejecting reed bounce.
 constexpr unsigned long DEBOUNCE_US = 40000;
 
-// If we don't see another rotation for this long,
-// consider the anemometer stopped.
 constexpr unsigned long STOP_TIMEOUT_US = 3000000;
 
 // --------------------------------------------------
 // PHYSICAL ANEMOMETER VALUES
-// --------------------------------------------------
-
-// IMPORTANT:
-// Measure from the CENTER OF THE SHAFT
-// to the CENTER OF ONE CUP.
-//
-// Example: 7 cm radius = 0.07 meters
 constexpr float CUP_RADIUS_M = 0.0889f;
 
-// Real cup anemometers need calibration.
-// Leave at 1.0 for initial testing.
-// We can calibrate this later.
 constexpr float CALIBRATION_FACTOR = 1.0f;
 
-
-// --------------------------------------------------
 // INTERRUPT DATA
-// --------------------------------------------------
 
 volatile unsigned long revolutionCount = 0;
 
@@ -40,9 +23,7 @@ volatile unsigned long lastPulseTimeUS = 0;
 volatile unsigned long rotationIntervalUS = 0;
 
 
-// --------------------------------------------------
 // REED SWITCH INTERRUPT
-// --------------------------------------------------
 
 void IRAM_ATTR reedISR() {
 
@@ -64,10 +45,7 @@ void IRAM_ATTR reedISR() {
     }
 }
 
-
-// --------------------------------------------------
 // INITIALIZATION
-// --------------------------------------------------
 
 void initAnemometer() {
 
@@ -82,10 +60,7 @@ void initAnemometer() {
     Serial.println("Anemometer initialized");
 }
 
-
-// --------------------------------------------------
 // LIGHT SLEEP WAKEUP
-// --------------------------------------------------
 
 void enableAnemometerLightSleepWakeup() {
 
@@ -101,10 +76,7 @@ void enableAnemometerLightSleepWakeup() {
 }
 
 
-// --------------------------------------------------
 // UPDATE
-// --------------------------------------------------
-
 void updateAnemometer() {
 
     // If the anemometer hasn't moved recently,
@@ -126,10 +98,7 @@ void updateAnemometer() {
     }
 }
 
-
-// --------------------------------------------------
 // TOTAL REVOLUTIONS
-// --------------------------------------------------
 
 unsigned long getRevolutionCount() {
 
@@ -142,10 +111,7 @@ unsigned long getRevolutionCount() {
     return count;
 }
 
-
-// --------------------------------------------------
 // RPM
-// --------------------------------------------------
 
 float getRPM() {
 
@@ -165,10 +131,7 @@ float getRPM() {
     return 60000000.0f / interval;
 }
 
-
-// --------------------------------------------------
 // WIND SPEED
-// --------------------------------------------------
 
 float getWindSpeedMPS() {
 
@@ -188,10 +151,7 @@ float getWindSpeedMPS() {
 }
 
 
-// --------------------------------------------------
 // MPH
-// --------------------------------------------------
-
 float getWindSpeedMPH() {
 
     return getWindSpeedMPS() * 2.23694f;

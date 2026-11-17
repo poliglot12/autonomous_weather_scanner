@@ -34,8 +34,8 @@ const unsigned long uploadInterval =
 // depends on how much the temperature moved since the last cycle:
 // fast-changing temperature -> short cycle, stable temperature -> long cycle.
 
-const unsigned long MIN_CYCLE_INTERVAL_MS = 15UL * 1000UL;        // fastest: 15 s
-const unsigned long MAX_CYCLE_INTERVAL_MS = 5UL * 60UL * 1000UL;  // slowest: 5 min
+const unsigned long MIN_CYCLE_INTERVAL_MS = 15UL * 1000UL;
+const unsigned long MAX_CYCLE_INTERVAL_MS = 5UL * 60UL * 1000UL;
 
 const float TEMP_DELTA_FAST_C = 0.3f;   // delta at/above this -> MIN_CYCLE_INTERVAL_MS
 const float TEMP_DELTA_SLOW_C = 0.05f;  // delta at/below this -> MAX_CYCLE_INTERVAL_MS
@@ -68,8 +68,7 @@ unsigned long nextCycleIntervalMs(float currentTemp) {
 }
 
 // Light-sleeps for durationMs, waking briefly on every anemometer pulse
-// (so wind counting stays continuous) and at least once a second so
-// updateAnemometer() can still detect "wind stopped".
+
 void lightSleepFor(unsigned long durationMs) {
 
     unsigned long elapsed = 0;
@@ -250,11 +249,7 @@ void loop() {
 
     display.display();
 
-    // -------------------------
-    // SD LOGGING
-    // -------------------------
-    // One log line per cycle; the cycle itself is already paced
-    // adaptively below, so no separate fixed interval is needed here.
+    // SD LOGGER
 
     logWeatherData(
         now,
@@ -264,9 +259,7 @@ void loop() {
         data.uv
     );
 
-    // -------------------------
     // CLOUD / D1 LOGGING
-    // -------------------------
 
     if (
         lastUploadTime == 0 ||
@@ -306,14 +299,11 @@ void loop() {
         }
 
         // WiFi only needs to be up for the upload itself;
-        // drop it before sleeping to avoid keeping the radio powered.
         WiFi.disconnect(true);
         WiFi.mode(WIFI_OFF);
     }
 
-    // -------------------------
     // ADAPTIVE LIGHT SLEEP
-    // -------------------------
 
     unsigned long cycleInterval = nextCycleIntervalMs(data.temperature);
     lastCycleTemp = data.temperature;
